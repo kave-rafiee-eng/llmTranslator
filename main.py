@@ -4,16 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# origins = [
-#     "http://localhost:3001",
-# ]
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=origins,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -27,21 +17,19 @@ import os
 load_dotenv('.env')
 
 from langchain_openai import ChatOpenAI
-# from langfuse import observe
-# from langfuse import Langfuse
-# langfuse = Langfuse()
+
+
 llm = ChatOpenAI(
-    model="gpt-4o",
+    model="gapgpt-qwen-3.5",
     temperature=0.3,
-    base_url='https://api.gapgpt.app/v1',
-    api_key=os.environ["api_key"],
+    base_url=os.environ['BASE_URL'],
+    api_key=os.environ["API_KEY"],
 )
 
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, SystemMessage
 
-# Structured Output
 class TranslationOutput(BaseModel):
     persian: str = Field(description="Persian translation")
     english: str = Field(description="English translation")
@@ -50,54 +38,69 @@ class TranslationOutput(BaseModel):
     russian: str = Field(description="Russian translation")
     german: str = Field(description="German translation")
     
-    
+class TranslationOutputEnglish(BaseModel):
+    english: str = Field(description="English translation")
 
 
-llm_structured = llm.with_structured_output(TranslationOutput)
+llm_structuredFullLanguage = llm.with_structured_output(TranslationOutput)
+llm_structuredEnglish = llm.with_structured_output(TranslationOutputEnglish)
 
 
-"""
-1. Fix spelling and grammar of the input text. do not change semantic meaning of input 
-2. Translate the corrected text into the following languages:
-"""
 
-prompt = ChatPromptTemplate.from_messages(
+promptTranslateFull = ChatPromptTemplate.from_messages(
     [
         (
             "system",
             """
-You are a professional linguist.
+            You are a professional linguist.
 
-Tasks: 
-Translate into the following languages:
-   - Persian
-   - English
-   - Arabic
-   - Turkish
-   - russian
-   - german
-   
+            Tasks: 
+            Translate into the following languages:
+            - Persian
+            - English
+            - Arabic
+            - Turkish
+            - russian
+            - german
+            
 
-Return the result in the required structured format.
-"""
+            Return the result in the required structured format.
+            """
         ),
         ("human", "{text}")
     ]
 )
 
-chain = prompt | llm_structured
+chainFull = promptTranslateFull | llm_structuredFullLanguage
 
 
-# result = chain.invoke({
-#     "text": "من یه تورک قوی هستم"
-# })
+promptEnglish = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+            You are a professional linguist.
+
+            Tasks: 
+            Translate into the following languages:
+            - English
+
+            Return the result in the required structured format.
+            """
+                    ),
+        ("human", "{text}")
+    ]
+)
+
+chainEnglish = promptEnglish | llm_structuredEnglish
+
 
 class TranslationInput(BaseModel):
     text: str
 
 @app.post("/translate")
 async def translatorApi(data: TranslationInput):
-    resault = await chain.ainvoke({"text": data.text})
+    resault = await chainFull.ainvoke({"text": data.text})
 
     return {
         "persian": resault.persian,
@@ -110,17 +113,13 @@ async def translatorApi(data: TranslationInput):
     
 @app.post("/translateToEnglish")
 async def translatorApi(data: TranslationInput):
-    resault = await chain.ainvoke({"text": data.text})
+    resault = await chainEnglish.ainvoke({"text": data.text})
 
     return {
-        "persian": resault.persian,
+        "persian": data.text,
         "english": resault.english,
-        "arabic": resault.arabic,
-        "turkish": resault.turkish,
-        "german" : resault.german,
-        "russian" : resault.russian
     }
- 
+
 
 #uvicorn main:app --reload
 
