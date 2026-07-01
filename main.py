@@ -20,7 +20,8 @@ from langchain_openai import ChatOpenAI
 
 
 llm = ChatOpenAI(
-    model="gapgpt-qwen-3.5",
+    # model="gapgpt-qwen-3.5",
+    model='gpt-5-nano',
     temperature=0.3,
     base_url=os.environ['BASE_URL'],
     api_key=os.environ["API_KEY"],
